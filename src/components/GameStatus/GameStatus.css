@@ -1,0 +1,36 @@
+.game-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background-color: #c0c0c0;
+  border-top: 3px solid #ffffff;
+  border-left: 3px solid #ffffff;
+  border-bottom: 3px solid #7b7b7b;
+  border-right: 3px solid #7b7b7b;
+  margin-bottom: 6px;
+}
+
+.game-status__counter,
+.game-status__timer {
+  background-color: #000;
+  padding: 2px 4px;
+  border-top: 2px solid #7b7b7b;
+  border-left: 2px solid #7b7b7b;
+  border-bottom: 2px solid #ffffff;
+  border-right: 2px solid #ffffff;
+}
+
+.led-display {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 22px;
+  font-weight: bold;
+  color: #ff0000;
+  letter-spacing: 2px;
+}
+
+.game-status__face {
+  font-size: 28px;
+  cursor: default;
+  user-select: none;
+}
