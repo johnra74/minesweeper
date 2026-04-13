@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { DIFFICULTIES, GAME_STATUS } from '../constants/gameConfig';
 import { createEmptyBoard, placeMines } from '../engine/boardFactory';
 import {
   revealCell,
   toggleFlag,
+  chordCell,
   revealAllMines,
   checkWinCondition,
 } from '../engine/gameEngine';
@@ -27,10 +28,20 @@ export const useGameState = (initialDifficulty = 'BEGINNER') => {
   const [difficulty, setDifficulty] = useState(initialDifficulty);
   const [gameStatus, setGameStatus] = useState(GAME_STATUS.IDLE);
   const [board, setBoard] = useState(() => createEmptyBoard(config.rows, config.cols));
-  const [minesLeft, setMinesLeft] = useState(config.mines);
   const [time, setTime] = useState(0);
+  const [touchMenuCell, setTouchMenuCell] = useState(null);
 
   const timerRef = useRef(null);
+
+  // Derive mines-left directly from the board: total mines minus flagged cells.
+  // This avoids double-counting caused by calling setMinesLeft inside a setBoard
+  // updater, which React Strict Mode double-invokes to detect side effects.
+  const minesLeft = useMemo(
+    () =>
+      DIFFICULTIES[difficulty].mines -
+      board.flat().filter((cell) => cell.isFlagged).length,
+    [difficulty, board]
+  );
 
   // Start / stop the timer based on game status.
   useEffect(() => {
@@ -50,9 +61,9 @@ export const useGameState = (initialDifficulty = 'BEGINNER') => {
     const nextConfig = DIFFICULTIES[nextDifficulty];
     setDifficulty(nextDifficulty);
     setBoard(createEmptyBoard(nextConfig.rows, nextConfig.cols));
-    setMinesLeft(nextConfig.mines);
     setGameStatus(GAME_STATUS.IDLE);
     setTime(0);
+    setTouchMenuCell(null);
   }, [difficulty]);
 
   /**
@@ -77,7 +88,7 @@ export const useGameState = (initialDifficulty = 'BEGINNER') => {
       }
 
       const cell = workingBoard[row][col];
-      if (cell.isFlagged || cell.isRevealed) return currentBoard;
+      if (cell.isFlagged || cell.isSuspect || cell.isRevealed) return currentBoard;
 
       // Player hit a mine — reveal board and end game.
       if (cell.isMine) {
@@ -96,20 +107,71 @@ export const useGameState = (initialDifficulty = 'BEGINNER') => {
   }, [gameStatus, difficulty]);
 
   /**
-   * Handles a right-click on a cell to place or remove a flag.
+   * Handles a right-click on a cell to cycle its mark state:
+   * none → flagged → suspect → none.
    * Only valid while the game is in the PLAYING state.
    */
   const handleCellRightClick = useCallback((row, col) => {
     if (gameStatus !== GAME_STATUS.PLAYING) return;
+    setBoard((currentBoard) => toggleFlag(currentBoard, row, col));
+  }, [gameStatus]);
+
+  /**
+   * Chords the cell at (row, col).
+   * Reveals all unflagged neighbours when flagged count matches adjacentMines.
+   * If the chord exposes a mine, transitions to LOST.
+   */
+  const handleChord = useCallback((row, col) => {
+    if (gameStatus !== GAME_STATUS.PLAYING) return;
 
     setBoard((currentBoard) => {
-      const newBoard = toggleFlag(currentBoard, row, col);
-      // Adjust the mines-left counter: flagging reduces it, un-flagging restores it.
-      const wasFlagged = currentBoard[row][col].isFlagged;
-      setMinesLeft((prev) => (wasFlagged ? prev + 1 : prev - 1));
-      return newBoard;
+      const chorded = chordCell(currentBoard, row, col);
+      if (chorded === currentBoard) return currentBoard;
+
+      const mineTouched = chorded.some((r) =>
+        r.some((c) => c.isMine && c.isRevealed)
+      );
+
+      if (mineTouched) {
+        setGameStatus(GAME_STATUS.LOST);
+        return revealAllMines(chorded);
+      }
+
+      if (checkWinCondition(chorded)) {
+        setGameStatus(GAME_STATUS.WON);
+      }
+
+      return chorded;
     });
   }, [gameStatus]);
+
+  /**
+   * Opens the touch action menu for the given cell.
+   */
+  const openTouchMenu = useCallback((row, col, position) => {
+    if (gameStatus === GAME_STATUS.WON || gameStatus === GAME_STATUS.LOST) return;
+    setTouchMenuCell({ row, col, position });
+  }, [gameStatus]);
+
+  /**
+   * Closes the touch action menu.
+   */
+  const closeTouchMenu = useCallback(() => {
+    setTouchMenuCell(null);
+  }, []);
+
+  /**
+   * Dispatches a touch menu action to the appropriate handler.
+   */
+  const handleTouchAction = useCallback((action, row, col) => {
+    switch (action) {
+      case 'reveal':  handleCellClick(row, col);      break;
+      case 'chord':   handleChord(row, col);           break;
+      case 'flag':    handleCellRightClick(row, col);  break;
+      case 'suspect': handleCellRightClick(row, col);  break;
+      default: break;
+    }
+  }, [handleCellClick, handleChord, handleCellRightClick]);
 
   return {
     board,
@@ -117,8 +179,13 @@ export const useGameState = (initialDifficulty = 'BEGINNER') => {
     difficulty,
     minesLeft,
     time,
+    touchMenuCell,
     startNewGame,
     handleCellClick,
     handleCellRightClick,
+    handleChord,
+    openTouchMenu,
+    closeTouchMenu,
+    handleTouchAction,
   };
 };

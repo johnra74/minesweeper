@@ -62,8 +62,8 @@ export const revealCell = (board, row, col) => {
 };
 
 /**
- * Toggles the flagged state of the cell at (row, col).
- * Already-revealed cells cannot be flagged.
+ * Cycles the mark state of a hidden cell: none → flagged → suspect → none.
+ * Already-revealed cells are not affected.
  *
  * @param {Cell[][]} board
  * @param {number}   row
@@ -71,13 +71,67 @@ export const revealCell = (board, row, col) => {
  * @returns {Cell[][]}
  */
 export const toggleFlag = (board, row, col) => {
-  if (board[row][col].isRevealed) return board;
+  const cell = board[row][col];
+  if (cell.isRevealed) return board;
+
+  let update;
+  if (!cell.isFlagged && !cell.isSuspect) {
+    update = { isFlagged: true,  isSuspect: false }; // none → flagged
+  } else if (cell.isFlagged) {
+    update = { isFlagged: false, isSuspect: true  }; // flagged → suspect
+  } else {
+    update = { isFlagged: false, isSuspect: false }; // suspect → none
+  }
 
   return board.map((r, ri) =>
     r.map((c, ci) =>
-      ri === row && ci === col ? { ...c, isFlagged: !c.isFlagged } : c
+      ri === row && ci === col ? { ...c, ...update } : c
     )
   );
+};
+
+/**
+ * Chords the cell at (row, col): if the number of flagged neighbours exactly
+ * matches the cell's adjacentMines count, reveals all remaining hidden,
+ * unflagged neighbours. Returns board unchanged if preconditions are not met.
+ *
+ * @param {Cell[][]} board
+ * @param {number}   row
+ * @param {number}   col
+ * @returns {Cell[][]}
+ */
+export const chordCell = (board, row, col) => {
+  const cell = board[row][col];
+  if (!cell.isRevealed || cell.adjacentMines === 0) return board;
+
+  const rows = board.length;
+  const cols = board[0].length;
+
+  const neighbours = [];
+  let flaggedCount = 0;
+
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+      if (board[nr][nc].isFlagged) flaggedCount++;
+      neighbours.push([nr, nc]);
+    }
+  }
+
+  if (flaggedCount !== cell.adjacentMines) return board;
+
+  let updatedBoard = board;
+  for (const [nr, nc] of neighbours) {
+    const neighbour = updatedBoard[nr][nc];
+    if (!neighbour.isFlagged && !neighbour.isRevealed) {
+      updatedBoard = revealCell(updatedBoard, nr, nc);
+    }
+  }
+
+  return updatedBoard;
 };
 
 /**

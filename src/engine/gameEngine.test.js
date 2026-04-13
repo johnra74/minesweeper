@@ -1,6 +1,7 @@
 import {
   revealCell,
   toggleFlag,
+  chordCell,
   revealAllMines,
   checkWinCondition,
 } from './gameEngine';
@@ -96,21 +97,31 @@ describe('revealCell', () => {
 });
 
 // ---------------------------------------------------------------------------
-// toggleFlag
+// toggleFlag — three-way cycle: none → flagged → suspect → none
 // ---------------------------------------------------------------------------
 
 describe('toggleFlag', () => {
-  it('adds a flag to a hidden cell', () => {
+  it('cycles none → flagged', () => {
     const board = makeBoard();
     const result = toggleFlag(board, 1, 1);
     expect(result[1][1].isFlagged).toBe(true);
+    expect(result[1][1].isSuspect).toBe(false);
   });
 
-  it('removes a flag from a flagged cell', () => {
+  it('cycles flagged → suspect', () => {
     const board = makeBoard();
     board[1][1] = { ...board[1][1], isFlagged: true };
     const result = toggleFlag(board, 1, 1);
     expect(result[1][1].isFlagged).toBe(false);
+    expect(result[1][1].isSuspect).toBe(true);
+  });
+
+  it('cycles suspect → none', () => {
+    const board = makeBoard();
+    board[1][1] = { ...board[1][1], isSuspect: true };
+    const result = toggleFlag(board, 1, 1);
+    expect(result[1][1].isFlagged).toBe(false);
+    expect(result[1][1].isSuspect).toBe(false);
   });
 
   it('does not toggle a revealed cell', () => {
@@ -135,6 +146,110 @@ describe('toggleFlag', () => {
         expect(cell.isFlagged).toBe(false);
       })
     );
+  });
+
+  it('never produces a state where both isFlagged and isSuspect are true', () => {
+    let board = makeBoard();
+    for (let i = 0; i < 9; i++) {
+      board = toggleFlag(board, 1, 1);
+      expect(board[1][1].isFlagged && board[1][1].isSuspect).toBe(false);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chordCell
+// ---------------------------------------------------------------------------
+
+describe('chordCell', () => {
+  /**
+   * 3×3 board: mine at (0,0) flagged, centre (1,1) revealed with adjacentMines=1.
+   * Safe neighbours: (0,1),(0,2),(1,0),(1,2),(2,0),(2,1),(2,2).
+   */
+  const buildChordBoard = () => {
+    const board = createEmptyBoard(3, 3);
+    board[0][0] = { ...board[0][0], isMine: true, isFlagged: true };
+    const withCounts = calculateAdjacentMines(board);
+    // Reveal the centre cell.
+    return withCounts.map((row, r) =>
+      row.map((cell, c) =>
+        r === 1 && c === 1 ? { ...cell, isRevealed: true } : cell
+      )
+    );
+  };
+
+  it('returns board unchanged when target cell is not revealed', () => {
+    const board = buildChordBoard();
+    const hidden = board.map((row, r) =>
+      row.map((cell, c) => (r === 1 && c === 1 ? { ...cell, isRevealed: false } : cell))
+    );
+    expect(chordCell(hidden, 1, 1)).toBe(hidden);
+  });
+
+  it('returns board unchanged when adjacentMines is 0', () => {
+    const board = buildChordBoard();
+    const noAdj = board.map((row, r) =>
+      row.map((cell, c) => (r === 1 && c === 1 ? { ...cell, adjacentMines: 0 } : cell))
+    );
+    expect(chordCell(noAdj, 1, 1)).toBe(noAdj);
+  });
+
+  it('returns board unchanged when flagged count is less than adjacentMines', () => {
+    const board = buildChordBoard();
+    // Remove the flag so count drops to 0, adjacentMines is 1.
+    const noFlag = board.map((row, r) =>
+      row.map((cell, c) => (r === 0 && c === 0 ? { ...cell, isFlagged: false } : cell))
+    );
+    expect(chordCell(noFlag, 1, 1)).toBe(noFlag);
+  });
+
+  it('returns board unchanged when flagged count exceeds adjacentMines', () => {
+    const board = buildChordBoard();
+    // Add a second flag → flaggedCount=2, adjacentMines=1.
+    const extraFlag = board.map((row, r) =>
+      row.map((cell, c) => (r === 0 && c === 1 ? { ...cell, isFlagged: true } : cell))
+    );
+    expect(chordCell(extraFlag, 1, 1)).toBe(extraFlag);
+  });
+
+  it('reveals all unflagged hidden neighbours when count matches', () => {
+    const board = buildChordBoard();
+    const result = chordCell(board, 1, 1);
+    const safe = [[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]];
+    safe.forEach(([r, c]) => expect(result[r][c].isRevealed).toBe(true));
+  });
+
+  it('does not reveal the flagged mine', () => {
+    const board = buildChordBoard();
+    const result = chordCell(board, 1, 1);
+    expect(result[0][0].isRevealed).toBe(false);
+    expect(result[0][0].isFlagged).toBe(true);
+  });
+
+  it('does not re-reveal an already-revealed neighbour', () => {
+    const board = buildChordBoard();
+    const withRevealed = board.map((row, r) =>
+      row.map((cell, c) => (r === 0 && c === 1 ? { ...cell, isRevealed: true } : cell))
+    );
+    const result = chordCell(withRevealed, 1, 1);
+    expect(result[0][1].isRevealed).toBe(true);
+  });
+
+  it('cascades BFS when a chorded neighbour has zero adjacent mines', () => {
+    // Use a safe 3×3 board: mine at (0,0) flagged, (1,1) revealed adj=1,
+    // but (2,2) has adjacentMines=0 so BFS should cascade from it.
+    const board = createEmptyBoard(3, 3);
+    board[0][0] = { ...board[0][0], isMine: true, isFlagged: true };
+    const withCounts = calculateAdjacentMines(board);
+    // Manually set (2,2) adjacentMines to 0 (it naturally is for this layout).
+    const revealed11 = withCounts.map((row, r) =>
+      row.map((cell, c) =>
+        r === 1 && c === 1 ? { ...cell, isRevealed: true } : cell
+      )
+    );
+    const result = chordCell(revealed11, 1, 1);
+    // BFS should have cascaded — (2,2) and its reachable neighbours should be revealed.
+    expect(result[2][2].isRevealed).toBe(true);
   });
 });
 
