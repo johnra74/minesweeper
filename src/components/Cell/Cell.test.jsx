@@ -10,6 +10,7 @@ const defaultCell = {
   isMine: false,
   isRevealed: false,
   isFlagged: false,
+  isSuspect: false,
   adjacentMines: 0,
 };
 
@@ -50,6 +51,11 @@ describe('Cell — rendering', () => {
     expect(screen.getByRole('button').textContent).toBe('🚩');
   });
 
+  it('renders a suspected cell with the question mark emoji', () => {
+    renderCell({ isSuspect: true });
+    expect(screen.getByRole('button').textContent).toBe('❓');
+  });
+
   it('renders a revealed mine with the bomb emoji', () => {
     renderCell({ isMine: true, isRevealed: true });
     const btn = screen.getByRole('button');
@@ -88,6 +94,14 @@ describe('Cell — rendering', () => {
     );
   });
 
+  it('includes "suspected" in aria-label when cell is suspected', () => {
+    renderCell({ isSuspect: true });
+    expect(screen.getByRole('button')).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('suspected')
+    );
+  });
+
   it('applies a color style for numbered revealed cells', () => {
     renderCell({ isRevealed: true, adjacentMines: 1 });
     expect(screen.getByRole('button')).toHaveStyle({ color: '#0000ff' });
@@ -95,7 +109,6 @@ describe('Cell — rendering', () => {
 
   it('does not apply a color style to unrevealed cells', () => {
     renderCell({ adjacentMines: 3 });
-    // color should be undefined / not set
     expect(screen.getByRole('button')).not.toHaveStyle({ color: '#ff0000' });
   });
 });
@@ -105,11 +118,33 @@ describe('Cell — rendering', () => {
 // ---------------------------------------------------------------------------
 
 describe('Cell — interactions', () => {
-  it('calls onLeftClick with (row, col) on primary click', () => {
+  it('calls onLeftClick with (row, col) on primary click of a hidden cell', () => {
     const { onLeftClick } = renderCell({}, { row: 2, col: 4 });
     fireEvent.click(screen.getByRole('button'));
     expect(onLeftClick).toHaveBeenCalledWith(2, 4);
     expect(onLeftClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onChord instead of onLeftClick when clicking a revealed numbered cell', () => {
+    const onChord = jest.fn();
+    const { onLeftClick } = renderCell(
+      { isRevealed: true, adjacentMines: 2 },
+      { row: 1, col: 1, onChord }
+    );
+    fireEvent.click(screen.getByRole('button'));
+    expect(onChord).toHaveBeenCalledWith(1, 1);
+    expect(onLeftClick).not.toHaveBeenCalled();
+  });
+
+  it('calls onLeftClick for a revealed cell with no adjacent mines (no chord)', () => {
+    const onChord = jest.fn();
+    const { onLeftClick } = renderCell(
+      { isRevealed: true, adjacentMines: 0 },
+      { onChord }
+    );
+    fireEvent.click(screen.getByRole('button'));
+    expect(onLeftClick).toHaveBeenCalledTimes(1);
+    expect(onChord).not.toHaveBeenCalled();
   });
 
   it('calls onRightClick with (row, col) on context menu', () => {

@@ -9,11 +9,13 @@ import './GameBoard.css';
  * It is a pure presentational component: no game logic lives here.
  *
  * @param {object}   props
- * @param {Cell[][]} props.board          - 2-D array of cell data.
- * @param {Function} props.onCellClick    - Forwarded to each Cell as onLeftClick.
- * @param {Function} props.onCellRightClick - Forwarded to each Cell as onRightClick.
+ * @param {Cell[][]} props.board             - 2-D array of cell data.
+ * @param {Function} props.onCellClick       - Forwarded to each Cell as onLeftClick.
+ * @param {Function} props.onCellRightClick  - Forwarded to each Cell as onRightClick.
+ * @param {Function} [props.onCellLongPress] - Forwarded to each Cell as onLongPress.
+ * @param {Function} [props.onCellChord]     - Forwarded to each Cell as onChord.
  */
-const GameBoard = ({ board, onCellClick, onCellRightClick }) => {
+const GameBoard = ({ board, onCellClick, onCellRightClick, onCellLongPress, onCellChord }) => {
   const cols = board[0]?.length ?? 0;
 
   return (
@@ -32,6 +34,8 @@ const GameBoard = ({ board, onCellClick, onCellRightClick }) => {
             col={colIndex}
             onLeftClick={onCellClick}
             onRightClick={onCellRightClick}
+            onLongPress={onCellLongPress}
+            onChord={onCellChord}
           />
         ))
       )}

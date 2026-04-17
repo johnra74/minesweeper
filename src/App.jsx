@@ -2,6 +2,7 @@ import React from 'react';
 import GameBoard from './components/GameBoard/GameBoard';
 import GameControls from './components/GameControls/GameControls';
 import GameStatus from './components/GameStatus/GameStatus';
+import TouchActionMenu from './components/TouchActionMenu/TouchActionMenu';
 import { useGameState } from './hooks/useGameState';
 import './App.css';
 
@@ -16,6 +17,7 @@ import './App.css';
  *   ├──────────────────────────────┤
  *   │          GameBoard           │  ← the clickable cell grid
  *   └──────────────────────────────┘
+ *   TouchActionMenu renders as a fixed overlay when touchMenuCell is set.
  *
  * App itself holds no game logic — it delegates entirely to useGameState.
  */
@@ -26,9 +28,14 @@ const App = () => {
     difficulty,
     minesLeft,
     time,
+    touchMenuCell,
     startNewGame,
     handleCellClick,
     handleCellRightClick,
+    handleChord,
+    openTouchMenu,
+    closeTouchMenu,
+    handleTouchAction,
   } = useGameState('BEGINNER');
 
   return (
@@ -51,8 +58,21 @@ const App = () => {
           board={board}
           onCellClick={handleCellClick}
           onCellRightClick={handleCellRightClick}
+          onCellLongPress={openTouchMenu}
+          onCellChord={handleChord}
         />
       </div>
+
+      {touchMenuCell && (
+        <TouchActionMenu
+          cell={board[touchMenuCell.row][touchMenuCell.col]}
+          position={touchMenuCell.position}
+          onAction={(action) =>
+            handleTouchAction(action, touchMenuCell.row, touchMenuCell.col)
+          }
+          onClose={closeTouchMenu}
+        />
+      )}
     </div>
   );
 };

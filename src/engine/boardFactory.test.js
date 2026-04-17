@@ -12,6 +12,7 @@ describe('createCell', () => {
       isMine: false,
       isRevealed: false,
       isFlagged: false,
+      isSuspect: false,
       adjacentMines: 0,
     });
   });
@@ -45,6 +46,7 @@ describe('createEmptyBoard', () => {
           isMine: false,
           isRevealed: false,
           isFlagged: false,
+          isSuspect: false,
           adjacentMines: 0,
         })
       )

@@ -13,6 +13,7 @@ export const createCell = () => ({
   isMine: false,
   isRevealed: false,
   isFlagged: false,
+  isSuspect: false,
   adjacentMines: 0,
 });
 
